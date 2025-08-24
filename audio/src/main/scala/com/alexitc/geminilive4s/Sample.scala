@@ -1,3 +1,5 @@
 package com.alexitc.geminilive4s
 
-object Sample {}
+object Sample {
+  def run: Unit = println("Hello!")
+}

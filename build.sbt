@@ -5,11 +5,19 @@ inThisBuild(
     organization := "com.alexitc.geminilive4s",
     homepage := Some(url("https://github.com/AlexITC/geminilive4s")),
     licenses := Seq(
-      "MIT" -> url("https://github.com/AlexITC/geminilive4s/blob/main/LICENSE")
+      "MIT" -> url("https://opensource.org/license/mit")
+    ),
+    description := "Gemini Live API for Scala",
+    startYear := Some(2025),
+    scmInfo := Some(
+      ScmInfo(
+        url("https://github.com/AlexITC/geminilive4s"),
+        "scm:git:git@github.com:AlexITC/geminilive4s.git"
+      )
     ),
     developers := List(
       Developer(
-        "alexitc",
+        "AlexITC",
         "Alexis Hernandez",
         "alexis@alexitc.com",
         url("https://alexitc.com")
@@ -23,7 +31,7 @@ inThisBuild(
 lazy val audio = project
   .in(file("audio"))
   .settings(
-    moduleName := "audio",
+    name := "audio",
     libraryDependencies ++= Seq(
       "com.google.genai" % "google-genai" % "1.10.0",
       "co.fs2" %% "fs2-core" % "3.12.0",
