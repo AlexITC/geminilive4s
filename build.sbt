@@ -33,7 +33,7 @@ lazy val audio = project
   .settings(
     name := "audio",
     libraryDependencies ++= Seq(
-      "com.google.genai" % "google-genai" % "1.10.0",
+      "com.google.genai" % "google-genai" % "1.14.0",
       "co.fs2" %% "fs2-core" % "3.12.0",
       "co.fs2" %% "fs2-io" % "3.12.0"
     )
