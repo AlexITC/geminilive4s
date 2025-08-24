@@ -15,7 +15,8 @@ inThisBuild(
         url("https://alexitc.com")
       )
     ),
-    scalaVersion := "3.7.2"
+    scalaVersion := "3.7.2",
+    versionScheme := Some("early-semver")
   )
 )
 
