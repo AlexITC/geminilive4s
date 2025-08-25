@@ -18,7 +18,7 @@ One of the key features is supporting [Automatic Function Calling](https://ai.go
 Pick the latest version from the [releases](https://github.com/AlexITC/geminilive4s/releases) page, then, add the dependency to your `build.sbt`:
 
 ```scala
-libraryDependencies += "com.alexitc.geminilive4s" % "audio" % "<version>"
+libraryDependencies += "com.alexitc.geminilive4s" %% "audio" % "<version>"
 ```
 
 This is how a minimal application looks like, it listens to your microphone and plays Gemini audio over your speaker:
