@@ -35,6 +35,9 @@ jobs:
       - name: Set up sbt
         uses: sbt/setup-sbt@v1
 
+      - uses: coursier/cache-action@v6
+      - uses: VirtusLab/scala-cli-setup@main
+
       - name: Check format
         run: sbt scalafmtCheckAll
 
@@ -43,6 +46,9 @@ jobs:
 
       - name: Run tests
         run: CI=true sbt test
+
+      - name: Compile examples
+        run: scala-cli compile examples/*.scala
 
       - name: Publish Test Report
         if: always() # Always run, even if previous steps failed
