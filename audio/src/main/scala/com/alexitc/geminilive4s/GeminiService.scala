@@ -7,6 +7,7 @@ import com.alexitc.geminilive4s.internal.*
 import com.alexitc.geminilive4s.models.*
 import com.google.genai
 import fs2.Pipe
+import scala.concurrent.duration.*
 
 import scala.jdk.CollectionConverters.*
 import scala.jdk.OptionConverters.*
@@ -15,14 +16,20 @@ import scala.jdk.OptionConverters.*
   * API. It follows the "pipeline" model, where the entire bidirectional
   * conversation is represented as a single, composable `fs2.Pipe`.
   */
-class GeminiService(gemini: GeminiIO, functions: List[GeminiFunction]) {
+class GeminiService(
+    gemini: GeminiIO,
+    functions: List[GeminiFunction],
+    wakeUpMessage: String
+) {
   import GeminiService.*
 
   /** Represents the entire bidirectional conversation with Gemini as a single
     * pipe. It takes a stream of audio bytes from a client (e.g., Twilio) and
     * returns a stream of audio bytes from Gemini.
     */
-  def conversationPipe: Pipe[IO, Array[Byte], GeminiOutputChunk] = { in =>
+  def conversationPipe(
+      geminiMustSpeakFirst: Boolean
+  ): Pipe[IO, Array[Byte], GeminiOutputChunk] = { in =>
     for {
       currentTurnIdRef <- fs2.Stream.eval(Ref.of[IO, Long](0L))
       fromGeminiStream = fs2.Stream
@@ -44,10 +51,21 @@ class GeminiService(gemini: GeminiIO, functions: List[GeminiFunction]) {
       // Send the processed chunk to Gemini
       toGeminiSink: fs2.Stream[IO, Unit] = in.evalMap(gemini.sendAudio)
 
+      // artificially start the conversation which causes gemini to speak
+      wakeUpStream = fs2.Stream.exec {
+        IO.whenA(geminiMustSpeakFirst) {
+          IO.sleep(1.seconds) >>
+            IO.println("Sending wake up signal") >>
+            gemini.sendMessage(wakeUpMessage)
+        }
+      }
+
       // The output of this `conversationPipe` is the
       //    processed audio from Gemini. The input stream `in` is concurrently
       //    drained into the `toGeminiSink`.
-      out <- processedOutput.concurrently(toGeminiSink)
+      out <- processedOutput
+        .concurrently(toGeminiSink)
+        .concurrently(wakeUpStream)
     } yield out
   }
 
@@ -174,6 +192,8 @@ object GeminiService {
       promptSettings: GeminiPromptSettings,
       functions: List[GeminiFunction]
   ): fs2.Stream[IO, GeminiService] = {
+    val wakeUpMessage =
+      if (promptSettings.language.startsWith("es")) "Hola" else "Hello"
     for {
       gemini <- fs2.Stream.resource(
         GeminiIO.make(
@@ -183,7 +203,7 @@ object GeminiService {
           makeGeminiConfig
         )
       )
-    } yield new GeminiService(gemini, functions)
+    } yield new GeminiService(gemini, functions, wakeUpMessage)
   }
 
   def makeGeminiConfig(
