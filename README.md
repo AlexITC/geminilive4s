@@ -42,15 +42,9 @@ object MinimalDemo extends IOApp.Simple {
         promptSettings = promptSettings,
         functions = List.empty
       )
-      micStream = MicSource.stream(audioFormat)
-      speaker = SpeakerSink.open(audioFormat)
-
-      _ <- micStream
-        .through(gemini.conversationPipe) // mic to gemini
-        .foreach { chunk =>
-          // gemini to speaker
-          IO.blocking(speaker.write(chunk.chunk, 0, chunk.chunk.length)).void
-        }
+      _ <- MicSource.stream(audioFormat)
+        .through(gemini.conversationPipe(geminiMustSpeakFirst = true))
+        .observe(in => in.map(_.chunk).through(SpeakerSink.pipe(audioFormat)))
     } yield ()
 
     pipeline.compile.drain
