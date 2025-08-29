@@ -194,7 +194,7 @@ object GeminiService {
       customApiVersion: Option[GeminiCustomApi] = None
   ): fs2.Stream[IO, GeminiService] = {
     val wakeUpMessage =
-      if (promptSettings.language.startsWith("es")) "Hola" else "Hello"
+      if (promptSettings.language.string.startsWith("es")) "Hola" else "Hello"
     for {
       gemini <- fs2.Stream.resource(
         GeminiIO.make(
@@ -240,10 +240,12 @@ object GeminiService {
             genai.types.VoiceConfig
               .builder()
               .prebuiltVoiceConfig(
-                genai.types.PrebuiltVoiceConfig.builder().voiceName(voiceName)
+                genai.types.PrebuiltVoiceConfig
+                  .builder()
+                  .voiceName(voiceName.string)
               )
           )
-          .languageCode(voiceLanguage)
+          .languageCode(voiceLanguage.string)
       )
       .tools(tool)
       .temperature(0.7f)

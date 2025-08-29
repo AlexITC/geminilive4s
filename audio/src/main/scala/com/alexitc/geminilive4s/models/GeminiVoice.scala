@@ -1,15 +1,19 @@
 package com.alexitc.geminilive4s
 package models
 
+abstract class GeminiVoice(val string: String)
+
 object GeminiVoice {
-  val Puck = "puck"
-  val Fenrir = "Fenrir"
-  val Kore = "Kore"
-  val Aoede = "Aoede"
-  val Charon = "Charon"
+  object Puck extends GeminiVoice("puck")
+  object Fenrir extends GeminiVoice("Fenrir")
+  object Kore extends GeminiVoice("Kore")
+  object Aoede extends GeminiVoice("Aoede")
+  object Charon extends GeminiVoice("Charon")
+
+  case class Custom(override val string: String) extends GeminiVoice(string)
 
   private val all = List(Puck, Fenrir, Kore, Aoede, Charon)
 
-  def random: String = Utils.random(all)
+  def random: GeminiVoice = Utils.random(all)
 
 }

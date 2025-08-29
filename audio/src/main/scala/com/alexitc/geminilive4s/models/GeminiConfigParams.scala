@@ -4,7 +4,7 @@ import com.google.genai
 
 case class GeminiConfigParams(
     prompt: String,
-    voiceLanguage: String,
-    voiceName: String,
+    voiceLanguage: GeminiLanguage,
+    voiceName: GeminiVoice,
     functionDefs: List[genai.types.FunctionDeclaration]
 )

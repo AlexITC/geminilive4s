@@ -100,7 +100,7 @@ private[geminilive4s] object GeminiIO {
         functionDefs = functionDefs
       )
       config = makeGeminiConfig(configParams)
-      session <- makeSession(client, config, model = promptSettings.model)
+      session <- makeSession(client, config, promptSettings.model)
 
       _ <- IO.println("✅ Connected to Gemini Live API")
     } yield GeminiIO(session, dispatcher)
@@ -117,10 +117,10 @@ private[geminilive4s] object GeminiIO {
   private def makeSession(
       client: Client,
       config: LiveConnectConfig,
-      model: String
+      model: GeminiModel
   ): IO[AsyncSession] = {
     val f = IO.blocking {
-      client.async.live.connect(model, config)
+      client.async.live.connect(model.string, config)
     }
 
     IO.fromCompletableFuture(f)

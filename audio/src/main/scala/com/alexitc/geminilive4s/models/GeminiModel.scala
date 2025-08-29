@@ -1,9 +1,15 @@
 package com.alexitc.geminilive4s.models
 
+sealed abstract class GeminiModel(val string: String)
+
 object GeminiModel {
   // limit to 2 requests/minute.
-  val flashPreview = "gemini-live-2.5-flash-preview"
-  val nativeAudio = "gemini-2.5-flash-preview-native-audio-dialog"
-  val nativeThinking = "gemini-2.5-flash-exp-native-audio-thinking-dialog"
+  object FlashPreview extends GeminiModel("gemini-live-2.5-flash-preview")
+  object NativeAudio
+      extends GeminiModel("gemini-2.5-flash-preview-native-audio-dialog")
+  object NativeThinking
+      extends GeminiModel("gemini-2.5-flash-exp-native-audio-thinking-dialog")
+
+  case class Custom(override val string: String) extends GeminiModel(string)
 
 }
