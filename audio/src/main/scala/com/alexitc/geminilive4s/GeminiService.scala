@@ -190,7 +190,8 @@ object GeminiService {
   def make(
       apiKey: String,
       promptSettings: GeminiPromptSettings,
-      functions: List[GeminiFunction]
+      functions: List[GeminiFunction],
+      customApiVersion: Option[GeminiCustomApi] = None
   ): fs2.Stream[IO, GeminiService] = {
     val wakeUpMessage =
       if (promptSettings.language.startsWith("es")) "Hola" else "Hello"
@@ -200,7 +201,8 @@ object GeminiService {
           apiKey,
           promptSettings,
           functions.map(_.declaration),
-          makeGeminiConfig
+          makeGeminiConfig,
+          customApiVersion
         )
       )
     } yield new GeminiService(gemini, functions, wakeUpMessage)
