@@ -75,11 +75,24 @@ private[geminilive4s] object GeminiIO {
       apiKey: String,
       promptSettings: GeminiPromptSettings,
       functionDefs: List[FunctionDeclaration],
-      makeGeminiConfig: GeminiConfigParams => LiveConnectConfig
+      makeGeminiConfig: GeminiConfigParams => LiveConnectConfig,
+      customApiVersion: Option[GeminiCustomApi]
   ): Resource[IO, GeminiIO] = {
     def acquire(dispatcher: Dispatcher[IO]) = for {
-      client <- IO(Client.builder().apiKey(apiKey).build())
-
+      client <- customApiVersion match {
+        case None =>
+          IO(Client.builder().apiKey(apiKey).build())
+        case Some(version) =>
+          IO(
+            Client
+              .builder()
+              .apiKey(apiKey)
+              .httpOptions(
+                HttpOptions.builder().apiVersion(version.string).build()
+              )
+              .build()
+          )
+      }
       configParams = GeminiConfigParams(
         prompt = promptSettings.prompt,
         voiceLanguage = promptSettings.language,
