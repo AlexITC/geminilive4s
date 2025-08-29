@@ -40,6 +40,32 @@ private[geminilive4s] class GeminiIO(
     IO.fromCompletableFuture(f).void
   }
 
+  def sendActivityStart(): IO[Unit] = {
+    val f = IO {
+      session.sendRealtimeInput(
+        LiveSendRealtimeInputParameters
+          .builder()
+          .activityStart(ActivityStart.builder())
+          .build
+      )
+    }
+
+    IO.fromCompletableFuture(f).void
+  }
+
+  def sendActivityEnd(): IO[Unit] = {
+    val f = IO {
+      session.sendRealtimeInput(
+        LiveSendRealtimeInputParameters
+          .builder()
+          .activityStart(ActivityStart.builder())
+          .build
+      )
+    }
+
+    IO.fromCompletableFuture(f).void
+  }
+
   def sendMessage(message: String): IO[Unit] = {
     val f = IO {
       session.sendRealtimeInput(

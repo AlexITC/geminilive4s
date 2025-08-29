@@ -10,7 +10,7 @@ case class GeminiConfig(
     // Required when using experimental models
     customApiVersion: Option[GeminiCustomApi] = None,
     // When enabled, Gemini waits for messages to confirm when the voice starts/stops
-    // NOTE: This is not implemented yet
+    // Requires v1alpha API
     disableAutomaticActivityDetection: Boolean = false,
     // When enabled, Gemini transcribes the input voice
     inputAudioTranscription: Boolean = false,
