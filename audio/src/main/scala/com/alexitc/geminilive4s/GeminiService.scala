@@ -189,71 +189,21 @@ object GeminiService {
 
   def make(
       apiKey: String,
-      promptSettings: GeminiPromptSettings,
-      functions: List[GeminiFunction],
-      customApiVersion: Option[GeminiCustomApi] = None
+      config: GeminiConfig
   ): fs2.Stream[IO, GeminiService] = {
     val wakeUpMessage =
-      if (promptSettings.language.string.startsWith("es")) "Hola" else "Hello"
+      if (config.language.string.startsWith("es")) "Hola"
+      else "Hello"
+
     for {
       gemini <- fs2.Stream.resource(
         GeminiIO.make(
           apiKey,
-          promptSettings,
-          functions.map(_.declaration),
-          makeGeminiConfig,
-          customApiVersion
+          config,
+          GeminiLiveConfigBuilder.make(config)
         )
       )
-    } yield new GeminiService(gemini, functions, wakeUpMessage)
-  }
-
-  def makeGeminiConfig(
-      configParams: GeminiConfigParams
-  ): genai.types.LiveConnectConfig = {
-    import configParams.*
-
-    val tool = genai.types.Tool
-      .builder()
-      .functionDeclarations(functionDefs*)
-      .build()
-
-    genai.types.LiveConnectConfig
-      .builder()
-      .inputAudioTranscription(
-        genai.types.AudioTranscriptionConfig.builder().build()
-      )
-      .outputAudioTranscription(
-        genai.types.AudioTranscriptionConfig.builder().build()
-      )
-      .responseModalities(genai.types.Modality.Known.AUDIO)
-      .systemInstruction(
-        genai.types.Content
-          .builder()
-          .parts(genai.types.Part.builder().text(prompt))
-          .build()
-      )
-      .speechConfig(
-        genai.types.SpeechConfig
-          .builder()
-          .voiceConfig(
-            genai.types.VoiceConfig
-              .builder()
-              .prebuiltVoiceConfig(
-                genai.types.PrebuiltVoiceConfig
-                  .builder()
-                  .voiceName(voiceName.string)
-              )
-          )
-          .languageCode(voiceLanguage.string)
-      )
-      .tools(tool)
-      .temperature(0.7f)
-      //      .enableAffectiveDialog(true) // not supported by a all models
-      //      .proactivity(
-      //        genai.types.ProactivityConfig.builder().proactiveAudio(true).build()
-      //      )
-      .build()
+    } yield new GeminiService(gemini, config.functions, wakeUpMessage)
   }
 
   private case class TaggedMessage(
