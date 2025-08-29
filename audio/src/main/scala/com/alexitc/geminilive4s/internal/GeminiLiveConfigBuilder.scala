@@ -12,16 +12,15 @@ object GeminiLiveConfigBuilder {
     }
 
     val options = List(
-      transform(params.disableAutomaticActivityDetection)(builder =>
-        builder // TODO: Enable when the app supports handling this
-//        _.realtimeInputConfig(
-//          RealtimeInputConfig
-//            .builder()
-//            .automaticActivityDetection(
-//              AutomaticActivityDetection.builder().disabled(true).build()
-//            )
-//            .build()
-//        )
+      transform(params.disableAutomaticActivityDetection)(
+        _.realtimeInputConfig(
+          RealtimeInputConfig
+            .builder()
+            .automaticActivityDetection(
+              AutomaticActivityDetection.builder().disabled(true).build()
+            )
+            .build()
+        )
       ),
       transform(params.inputAudioTranscription)(
         _.inputAudioTranscription(AudioTranscriptionConfig.builder().build())

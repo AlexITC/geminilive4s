@@ -19,7 +19,8 @@ import scala.jdk.OptionConverters.*
 class GeminiService(
     gemini: GeminiIO,
     functions: List[GeminiFunction],
-    wakeUpMessage: String
+    wakeUpMessage: String,
+    disableAutomaticActivityDetection: Boolean
 ) {
   import GeminiService.*
 
@@ -29,7 +30,7 @@ class GeminiService(
     */
   def conversationPipe(
       geminiMustSpeakFirst: Boolean
-  ): Pipe[IO, Array[Byte], GeminiOutputChunk] = { in =>
+  ): Pipe[IO, GeminiInputChunk, GeminiOutputChunk] = { in =>
     for {
       currentTurnIdRef <- fs2.Stream.eval(Ref.of[IO, Long](0L))
       fromGeminiStream = fs2.Stream
@@ -49,14 +50,31 @@ class GeminiService(
         .through(extractAudioPipe)
 
       // Send the processed chunk to Gemini
-      toGeminiSink: fs2.Stream[IO, Unit] = in.evalMap(gemini.sendAudio)
+      toGeminiSink: fs2.Stream[IO, Unit] = in.evalMap { input =>
+        input.activity match {
+          case Some(GeminiInputChunk.ActivityEvent.Start) =>
+            gemini.sendActivityStart() >> gemini.sendAudio(input.chunk)
+          case Some(GeminiInputChunk.ActivityEvent.End) =>
+            gemini.sendAudio(input.chunk) >> gemini.sendActivityEnd()
+
+          case None => gemini.sendAudio(input.chunk)
+        }
+      }
 
       // artificially start the conversation which causes gemini to speak
       wakeUpStream = fs2.Stream.exec {
         IO.whenA(geminiMustSpeakFirst) {
+          val send = if (disableAutomaticActivityDetection) {
+            gemini.sendActivityStart() >>
+              gemini.sendMessage(wakeUpMessage) >>
+              gemini.sendActivityEnd()
+          } else {
+            gemini.sendMessage(wakeUpMessage)
+          }
+
           IO.sleep(1.seconds) >>
             IO.println("Sending wake up signal") >>
-            gemini.sendMessage(wakeUpMessage)
+            send
         }
       }
 
@@ -87,10 +105,11 @@ class GeminiService(
   private val extractAudioPipe
       : Pipe[IO, genai.types.LiveServerMessage, GeminiOutputChunk] = {
     _.flatMap(msg => fs2.Stream.fromOption(msg.serverContent().toScala))
-      .flatMap { content =>
+      .map { content =>
         val output = transcriptionToText(content.outputTranscription)
         val input = transcriptionToText(content.inputTranscription)
         val transcription = Transcription(input = input, output = output)
+        val turnCompleted = content.turnComplete().toScala.contains(true)
         val data = content.modelTurn.toScala
           .flatMap(_.parts().toScala)
           .map(_.asScala.toSeq)
@@ -100,10 +119,7 @@ class GeminiService(
           .flatten
           .toArray
 
-        val opt = Option
-          .when(data.nonEmpty)(GeminiOutputChunk(transcription, data))
-
-        fs2.Stream.fromOption(opt)
+        GeminiOutputChunk(transcription, data, turnCompleted)
       }
   }
 
@@ -203,7 +219,13 @@ object GeminiService {
           GeminiLiveConfigBuilder.make(config)
         )
       )
-    } yield new GeminiService(gemini, config.functions, wakeUpMessage)
+    } yield new GeminiService(
+      gemini,
+      config.functions,
+      wakeUpMessage,
+      disableAutomaticActivityDetection =
+        config.disableAutomaticActivityDetection
+    )
   }
 
   private case class TaggedMessage(
