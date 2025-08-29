@@ -73,13 +73,11 @@ private[geminilive4s] object GeminiIO {
 
   def make(
       apiKey: String,
-      promptSettings: GeminiPromptSettings,
-      functionDefs: List[FunctionDeclaration],
-      makeGeminiConfig: GeminiConfigParams => LiveConnectConfig,
-      customApiVersion: Option[GeminiCustomApi]
+      config: GeminiConfig,
+      liveConfig: LiveConnectConfig
   ): Resource[IO, GeminiIO] = {
     def acquire(dispatcher: Dispatcher[IO]) = for {
-      client <- customApiVersion match {
+      client <- config.customApiVersion match {
         case None =>
           IO(Client.builder().apiKey(apiKey).build())
         case Some(version) =>
@@ -93,14 +91,7 @@ private[geminilive4s] object GeminiIO {
               .build()
           )
       }
-      configParams = GeminiConfigParams(
-        prompt = promptSettings.prompt,
-        voiceLanguage = promptSettings.language,
-        voiceName = promptSettings.voiceName,
-        functionDefs = functionDefs
-      )
-      config = makeGeminiConfig(configParams)
-      session <- makeSession(client, config, promptSettings.model)
+      session <- makeSession(client, liveConfig, config.model)
 
       _ <- IO.println("✅ Connected to Gemini Live API")
     } yield GeminiIO(session, dispatcher)
