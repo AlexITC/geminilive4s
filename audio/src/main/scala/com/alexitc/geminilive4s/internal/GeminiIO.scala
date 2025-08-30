@@ -58,7 +58,7 @@ private[geminilive4s] class GeminiIO(
       session.sendRealtimeInput(
         LiveSendRealtimeInputParameters
           .builder()
-          .activityStart(ActivityStart.builder())
+          .activityEnd(ActivityEnd.builder())
           .build
       )
     }
