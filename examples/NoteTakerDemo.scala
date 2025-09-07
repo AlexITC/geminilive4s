@@ -2,16 +2,12 @@
 
 //> using scala "3"
 //> using scala "21"
-//> using dep "com.alexitc.geminilive4s::audio:0.2.0"
+//> using dep "com.alexitc.geminilive4s::audio:0.3.0"
 
 import cats.effect.{IO, IOApp}
 import com.alexitc.geminilive4s.GeminiService
 import com.alexitc.geminilive4s.demo.{MicSource, SpeakerSink}
-import com.alexitc.geminilive4s.models.{
-  AudioStreamFormat,
-  GeminiFunction,
-  GeminiPromptSettings
-}
+import com.alexitc.geminilive4s.models.*
 import com.google.genai
 import fs2.concurrent.SignallingRef
 
@@ -34,7 +30,7 @@ object NoteTakerDemo extends IOApp.Simple {
     throw new RuntimeException("GEMINI_API_KEY is required")
   )
 
-  val promptSettings = GeminiPromptSettings(
+  val baseConfig = GeminiConfig(
     prompt = """
        |You are 'Note taker', your goal is asking about today events,
        |organize the thoughts and prepare a clean summary,
@@ -43,7 +39,8 @@ object NoteTakerDemo extends IOApp.Simple {
        |
        |when you are done, you should invoke a function with your summary.
        |""".stripMargin,
-    language = "en-US"
+    language = GeminiLanguage.EnglishUS,
+    functions = List.empty // must be defined later
   )
 
   override def run: IO[Unit] = {
@@ -52,22 +49,17 @@ object NoteTakerDemo extends IOApp.Simple {
     SignallingRef[IO, Boolean](false).flatMap { haltSignal =>
       // gemini can halt the stream process
       val functionDef = makeGeminiFunction(haltSignal.set(true))
+      val config = baseConfig.copy(functions = List(functionDef))
       val pipeline = for {
-        gemini <- GeminiService.make(
-          apiKey = apiKey,
-          promptSettings = promptSettings,
-          functions = List(functionDef)
-        )
-        micStream = MicSource.stream(audioFormat)
-        speaker = SpeakerSink.open(audioFormat)
+        gemini <- GeminiService.make(apiKey, config)
 
-        _ <- micStream
-          .through(gemini.conversationPipe) // mic to gemini
+        // mic to gemini, gemini to speaker
+        _ <- MicSource
+          .stream(audioFormat)
+          .map(bytes => GeminiInputChunk(bytes))
+          .through(gemini.conversationPipe(geminiMustSpeakFirst = true))
           .interruptWhen(haltSignal)
-          .foreach { chunk =>
-            // gemini to speaker
-            IO.blocking(speaker.write(chunk.chunk, 0, chunk.chunk.length)).void
-          }
+          .observe(in => in.map(_.chunk).through(SpeakerSink.pipe(audioFormat)))
       } yield ()
 
       pipeline.compile.drain

@@ -2,35 +2,39 @@
 
 //> using scala "3"
 //> using scala "21"
-//> using dep "com.alexitc.geminilive4s::audio:0.2.0"
+//> using dep "com.alexitc.geminilive4s::audio:0.3.0"
 
 import cats.effect.{IO, IOApp}
 import com.alexitc.geminilive4s.GeminiService
 import com.alexitc.geminilive4s.demo.{MicSource, SpeakerSink}
-import com.alexitc.geminilive4s.models.{AudioStreamFormat, GeminiPromptSettings}
+import com.alexitc.geminilive4s.models.{
+  AudioStreamFormat,
+  GeminiConfig,
+  GeminiInputChunk
+}
 
 object MinimalDemo extends IOApp.Simple {
-  val promptSettings = GeminiPromptSettings(
-    prompt = "You are a comedian and your goal is making me laugh"
+  val apiKey = sys.env.getOrElse(
+    "GEMINI_API_KEY",
+    throw new RuntimeException("GEMINI_API_KEY is required")
+  )
+
+  val config = GeminiConfig(
+    prompt = "You are a comedian and your goal is making me laugh",
+    functions = List.empty
   )
 
   override def run: IO[Unit] = {
     val audioFormat = AudioStreamFormat.GeminiOutput
     val pipeline = for {
-      gemini <- GeminiService.make(
-        apiKey = sys.env("GEMINI_API_KEY"),
-        promptSettings = promptSettings,
-        functions = List.empty
-      )
-      micStream = MicSource.stream(audioFormat)
-      speaker = SpeakerSink.open(audioFormat)
+      gemini <- GeminiService.make(apiKey, config)
 
-      _ <- micStream
-        .through(gemini.conversationPipe) // mic to gemini
-        .foreach { chunk =>
-          // gemini to speaker
-          IO.blocking(speaker.write(chunk.chunk, 0, chunk.chunk.length)).void
-        }
+      // mic to gemini, gemini to speaker
+      _ <- MicSource
+        .stream(audioFormat)
+        .map(bytes => GeminiInputChunk(bytes))
+        .through(gemini.conversationPipe(geminiMustSpeakFirst = true))
+        .observe(in => in.map(_.chunk).through(SpeakerSink.pipe(audioFormat)))
     } yield ()
 
     pipeline.compile.drain
