@@ -18,7 +18,7 @@ One of the key features is supporting [Automatic Function Calling](https://ai.go
 Pick the latest version from the [releases](https://github.com/AlexITC/geminilive4s/releases) page, then, add the dependency to your `build.sbt`:
 
 ```scala
-libraryDependencies += "com.alexitc.geminilive4s" %% "audio" % "<version>"
+libraryDependencies += "com.alexitc.geminilive4s" %% "audio" % "0.3.0"
 ```
 
 This is how a minimal application looks like, it listens to your microphone and plays Gemini audio over your speaker:
@@ -27,22 +27,32 @@ This is how a minimal application looks like, it listens to your microphone and 
 import cats.effect.{IO, IOApp}
 import com.alexitc.geminilive4s.GeminiService
 import com.alexitc.geminilive4s.demo.{MicSource, SpeakerSink}
-import com.alexitc.geminilive4s.models.{AudioStreamFormat, GeminiPromptSettings}
+import com.alexitc.geminilive4s.models.{
+  AudioStreamFormat,
+  GeminiConfig,
+  GeminiInputChunk
+}
 
 object MinimalDemo extends IOApp.Simple {
-  val promptSettings = GeminiPromptSettings(
-    prompt = "You are a comedian and your goal is making me laugh"
+  val apiKey = sys.env.getOrElse(
+    "GEMINI_API_KEY",
+    throw new RuntimeException("GEMINI_API_KEY is required")
+  )
+
+  val config = GeminiConfig(
+    prompt = "You are a comedian and your goal is making me laugh",
+    functions = List.empty
   )
 
   override def run: IO[Unit] = {
     val audioFormat = AudioStreamFormat.GeminiOutput
     val pipeline = for {
-      gemini <- GeminiService.make(
-        apiKey = sys.env("GEMINI_API_KEY"),
-        promptSettings = promptSettings,
-        functions = List.empty
-      )
-      _ <- MicSource.stream(audioFormat)
+      gemini <- GeminiService.make(apiKey, config)
+
+      // mic to gemini, gemini to speaker
+      _ <- MicSource
+        .stream(audioFormat)
+        .map(bytes => GeminiInputChunk(bytes))
         .through(gemini.conversationPipe(geminiMustSpeakFirst = true))
         .observe(in => in.map(_.chunk).through(SpeakerSink.pipe(audioFormat)))
     } yield ()
