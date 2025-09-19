@@ -6,6 +6,7 @@ import cats.implicits.*
 import com.alexitc.geminilive4s.internal.*
 import com.alexitc.geminilive4s.models.*
 import com.google.genai
+import com.google.genai.types.LiveServerSessionResumptionUpdate
 import fs2.Pipe
 import scala.concurrent.duration.*
 
@@ -20,7 +21,9 @@ class GeminiService(
     gemini: GeminiIO,
     functions: List[GeminiFunction],
     wakeUpMessage: String,
-    disableAutomaticActivityDetection: Boolean
+    disableAutomaticActivityDetection: Boolean,
+    sessionResumptionRef: Ref[IO, Option[String]],
+    isListeningOptRef: Option[Ref[IO, Boolean]]
 ) {
   import GeminiService.*
 
@@ -53,9 +56,11 @@ class GeminiService(
       toGeminiSink: fs2.Stream[IO, Unit] = in.evalMap { input =>
         input.activity match {
           case Some(GeminiInputChunk.ActivityEvent.Start) =>
-            gemini.sendActivityStart() >> gemini.sendAudio(input.chunk)
+            isListeningOptRef.map(_.update(_ => true)).getOrElse(IO.unit) >>
+              gemini.sendActivityStart() >> gemini.sendAudio(input.chunk)
           case Some(GeminiInputChunk.ActivityEvent.End) =>
-            gemini.sendAudio(input.chunk) >> gemini.sendActivityEnd()
+            isListeningOptRef.map(_.update(_ => false)).getOrElse(IO.unit) >>
+              gemini.sendAudio(input.chunk) >> gemini.sendActivityEnd()
 
           case None => gemini.sendAudio(input.chunk)
         }
@@ -133,6 +138,9 @@ class GeminiService(
         .flatMap(_.interrupted().toScala)
         .exists(identity)
 
+      val isGoAway = message.goAway().toScala.isDefined
+      val resumptionUpdateOpt = message.sessionResumptionUpdate().toScala
+
       val toolCalls = message
         .toolCall()
         .toScala
@@ -142,7 +150,11 @@ class GeminiService(
 
       val execCalls = toolCalls.map(execFunction)
 
-      val action = if (isInterrupted) {
+      val goAwayAction = if (isGoAway) whenGoAway() else IO.unit
+
+      val resumptionUpdateAction = updateResumption(resumptionUpdateOpt)
+
+      val interruptedAction = if (isInterrupted) {
         // Increment turn ID
         IO.println(
           "Gemini detected an interruption. Resetting stream state."
@@ -152,10 +164,36 @@ class GeminiService(
       // Get the current turn ID and offer the tagged message to the queue
       for {
         _ <- execCalls.sequence_
-        id <- action
+        _ <- resumptionUpdateAction
+        _ <- goAwayAction
+        id <- interruptedAction
         _ <- queue.offer(TaggedMessage(id, message))
       } yield ()
     }
+  }
+
+  private def updateResumption(
+      resumptionUpdateOpt: Option[LiveServerSessionResumptionUpdate]
+  ): IO[Unit] = {
+    resumptionUpdateOpt
+      .map { sessionResumption =>
+        val newHandleOpt = sessionResumption.newHandle().toScala
+        newHandleOpt
+          .map { newHandle =>
+            sessionResumptionRef.update(_ => Some(newHandle))
+          }
+          .getOrElse(IO.unit)
+      }
+      .getOrElse(IO.unit)
+  }
+
+  private def whenGoAway(): IO[Unit] = {
+    for {
+      sessionResumption <- sessionResumptionRef.get
+      _ <- gemini.openResumption(sessionResumption)
+      isListening <- isListeningOptRef.map(_.get).getOrElse(IO(false))
+      _ <- if (isListening) gemini.sendActivityStart() else IO.unit
+    } yield ()
   }
 
   private def execFunction(call: genai.types.FunctionCall): IO[Unit] = {
@@ -205,7 +243,8 @@ object GeminiService {
 
   def make(
       apiKey: String,
-      config: GeminiConfig
+      config: GeminiConfig,
+      handle: Option[String] = None
   ): fs2.Stream[IO, GeminiService] = {
     val wakeUpMessage =
       if (config.language.string.startsWith("es")) "Hola"
@@ -219,12 +258,24 @@ object GeminiService {
           GeminiLiveConfigBuilder.make(config)
         )
       )
+      sessionResumptionRef <- fs2.Stream.eval(
+        Ref.of[IO, Option[String]](handle)
+      )
+      isDisableAutomaticDetection = config.disableAutomaticActivityDetection
+      isListeningOptRef <-
+        if (isDisableAutomaticDetection) {
+          fs2.Stream.eval(Ref.of[IO, Boolean](false).map(Some(_)))
+        } else {
+          fs2.Stream.emit(None)
+        }
     } yield new GeminiService(
       gemini,
       config.functions,
       wakeUpMessage,
       disableAutomaticActivityDetection =
-        config.disableAutomaticActivityDetection
+        config.disableAutomaticActivityDetection,
+      sessionResumptionRef,
+      isListeningOptRef
     )
   }
 

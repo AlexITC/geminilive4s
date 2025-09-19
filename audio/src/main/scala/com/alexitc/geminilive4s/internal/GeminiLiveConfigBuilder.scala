@@ -4,7 +4,10 @@ import com.alexitc.geminilive4s.models.GeminiConfig
 import com.google.genai.types.*
 
 object GeminiLiveConfigBuilder {
-  def make(params: GeminiConfig): LiveConnectConfig = {
+  def make(
+      params: GeminiConfig,
+      handle: Option[String] = None
+  ): LiveConnectConfig = {
     def transform(when: Boolean)(
         f: LiveConnectConfig.Builder => LiveConnectConfig.Builder
     )(builder: LiveConnectConfig.Builder): LiveConnectConfig.Builder = {
@@ -43,6 +46,23 @@ object GeminiLiveConfigBuilder {
     val base = LiveConnectConfig
       .builder()
       .responseModalities(Modality.Known.AUDIO)
+      .contextWindowCompression(
+        ContextWindowCompressionConfig
+          .builder()
+          .slidingWindow(
+            SlidingWindow
+              .builder()
+              .targetTokens(16000)
+              .build()
+          )
+          .build()
+      )
+      .sessionResumption(
+        SessionResumptionConfig
+          .builder()
+          .handle(handle.getOrElse(""))
+          .build()
+      )
       .systemInstruction(
         Content
           .builder()
