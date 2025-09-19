@@ -52,7 +52,7 @@ object GeminiLiveConfigBuilder {
           .slidingWindow(
             SlidingWindow
               .builder()
-              .targetTokens(16000)
+              .targetTokens(12000)
               .build()
           )
           .build()
