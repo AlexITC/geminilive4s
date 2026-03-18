@@ -66,18 +66,20 @@ class GeminiService(
         IO.whenA(geminiMustSpeakFirst) {
           val send = (disableAutomaticActivityDetection, wakeUpMessage) match {
             case (true, Some(message)) =>
-              gemini.sendActivityStart() >>
+              IO.sleep(1.seconds) >>
+                IO.println("Sending wake up signal") >>
+                gemini.sendActivityStart() >>
                 gemini.sendMessage(message) >>
                 gemini.sendActivityEnd()
             case (false, Some(message)) =>
-              gemini.sendMessage(message)
+              IO.sleep(1.seconds) >>
+                IO.println("Sending wake up signal") >>
+                gemini.sendMessage(message)
             case _ =>
               IO.unit
           }
 
-          IO.sleep(1.seconds) >>
-            IO.println("Sending wake up signal") >>
-            send
+          send
         }
       }
 
