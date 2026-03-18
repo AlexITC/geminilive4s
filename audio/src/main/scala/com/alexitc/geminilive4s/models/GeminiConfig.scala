@@ -19,5 +19,8 @@ case class GeminiConfig(
     // Only a few models support this
     enableAffectiveDialog: Boolean = false,
     // Only a few models support this
-    proactivity: Boolean = false
+    proactivity: Boolean = false,
+    // Optional message sent automatically when the session starts
+    // Useful to wake up the model or trigger the first response
+    wakeUpMessage: Option[String] = None
 )

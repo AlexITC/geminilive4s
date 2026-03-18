@@ -19,7 +19,7 @@ import scala.jdk.OptionConverters.*
 class GeminiService(
     gemini: GeminiIO,
     functions: List[GeminiFunction],
-    wakeUpMessage: String,
+    wakeUpMessage: Option[String],
     disableAutomaticActivityDetection: Boolean
 ) {
   import GeminiService.*
@@ -64,17 +64,22 @@ class GeminiService(
       // artificially start the conversation which causes gemini to speak
       wakeUpStream = fs2.Stream.exec {
         IO.whenA(geminiMustSpeakFirst) {
-          val send = if (disableAutomaticActivityDetection) {
-            gemini.sendActivityStart() >>
-              gemini.sendMessage(wakeUpMessage) >>
-              gemini.sendActivityEnd()
-          } else {
-            gemini.sendMessage(wakeUpMessage)
+          val send = (disableAutomaticActivityDetection, wakeUpMessage) match {
+            case (true, Some(message)) =>
+              IO.sleep(1.seconds) >>
+                IO.println("Sending wake up signal") >>
+                gemini.sendActivityStart() >>
+                gemini.sendMessage(message) >>
+                gemini.sendActivityEnd()
+            case (false, Some(message)) =>
+              IO.sleep(1.seconds) >>
+                IO.println("Sending wake up signal") >>
+                gemini.sendMessage(message)
+            case _ =>
+              IO.unit
           }
 
-          IO.sleep(1.seconds) >>
-            IO.println("Sending wake up signal") >>
-            send
+          send
         }
       }
 
@@ -207,9 +212,6 @@ object GeminiService {
       apiKey: String,
       config: GeminiConfig
   ): fs2.Stream[IO, GeminiService] = {
-    val wakeUpMessage =
-      if (config.language.string.startsWith("es")) "Hola"
-      else "Hello"
 
     for {
       gemini <- fs2.Stream.resource(
@@ -222,7 +224,7 @@ object GeminiService {
     } yield new GeminiService(
       gemini,
       config.functions,
-      wakeUpMessage,
+      config.wakeUpMessage,
       disableAutomaticActivityDetection =
         config.disableAutomaticActivityDetection
     )
